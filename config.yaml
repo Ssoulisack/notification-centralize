@@ -1,75 +1,75 @@
 server:
-  host: "0.0.0.0"
-  port: 8080
-  mode: "debug" # debug | release
+  host: 
+  port: 
+  mode: 
 
 api:
-  key: "${API_KEY}" # override via env: API_KEY
-  rate_limit: 100   # requests per minute per key
+  key: 
+  rate_limit:
 
 database:
-  host: "localhost"
-  port: 5432
-  user: "soulisack"
-  password: "${DB_PASSWORD}"
-  name: "notification_center"
-  max_conns: 20
-  min_conns: 5
+  host: 
+  port: 
+  user: 
+  password: 
+  name: 
+  max_conns: 
+  min_conns: 
 
 redis:
-  addr: "localhost:6379"
-  password: ""
-  db: 0
+  addr: 
+  password: 
+  db: 
 
 queue:
-  engine: "memory" # memory | rabbitmq
+  engine: 
   rabbitmq:
-    url: "amqp://user:password@localhost:5672/"
-    queue: "notifications"
-  buffer_size: 10000
+    url: 
+    queue: 
+  buffer_size: 
 
 worker:
-  concurrency: 10
-  max_retry: 3
-  retry_delay: "5s"
+  concurrency: 
+  max_retry: 
+  retry_delay: 
 
 providers:
   email:
     enabled: true
-    host: "smtp.example.com"
-    port: 587
-    from: "noreply@example.com"
-    username: "${SMTP_USER}"
-    password: "${SMTP_PASSWORD}"
+    host: 
+    port: 
+    from: 
+    username: 
+    password: 
 
   sms:
     enabled: false
-    account_sid: "${TWILIO_SID}"
-    auth_token: "${TWILIO_TOKEN}"
-    from_number: "+1234567890"
+    account_sid: 
+    auth_token: 
+    from_number: 
 
   push:
     enabled: false
     fcm:
-      credentials_file: "./firebase-credentials.json"
+      credentials_file: 
     apns:
-      cert_file: "./apns-cert.pem"
-      key_file: "./apns-key.pem"
+      cert_file: 
+      key_file: 
       production: false
 
   slack:
     enabled: false
-    token: "${SLACK_BOT_TOKEN}"
+    token: 
 
   telegram:
     enabled: false
-    bot_token: "${TELEGRAM_BOT_TOKEN}"
+    bot_token: 
 
   line:
     enabled: false
-    channel_secret: "${LINE_CHANNEL_SECRET}"
-    channel_token: "${LINE_CHANNEL_TOKEN}"
+    channel_secret: 
+    channel_token: 
 
 logging:
-  level: "debug" # debug | info | warn | error
-  format: "json" # json | text
+  level: 
+  format: 
