@@ -1,0 +1,75 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  mode: "debug" # debug | release
+
+api:
+  key: "${API_KEY}" # override via env: API_KEY
+  rate_limit: 100   # requests per minute per key
+
+database:
+  host: "localhost"
+  port: 5432
+  user: "soulisack"
+  password: "${DB_PASSWORD}"
+  name: "notification_center"
+  max_conns: 20
+  min_conns: 5
+
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+
+queue:
+  engine: "memory" # memory | rabbitmq
+  rabbitmq:
+    url: "amqp://user:password@localhost:5672/"
+    queue: "notifications"
+  buffer_size: 10000
+
+worker:
+  concurrency: 10
+  max_retry: 3
+  retry_delay: "5s"
+
+providers:
+  email:
+    enabled: true
+    host: "smtp.example.com"
+    port: 587
+    from: "noreply@example.com"
+    username: "${SMTP_USER}"
+    password: "${SMTP_PASSWORD}"
+
+  sms:
+    enabled: false
+    account_sid: "${TWILIO_SID}"
+    auth_token: "${TWILIO_TOKEN}"
+    from_number: "+1234567890"
+
+  push:
+    enabled: false
+    fcm:
+      credentials_file: "./firebase-credentials.json"
+    apns:
+      cert_file: "./apns-cert.pem"
+      key_file: "./apns-key.pem"
+      production: false
+
+  slack:
+    enabled: false
+    token: "${SLACK_BOT_TOKEN}"
+
+  telegram:
+    enabled: false
+    bot_token: "${TELEGRAM_BOT_TOKEN}"
+
+  line:
+    enabled: false
+    channel_secret: "${LINE_CHANNEL_SECRET}"
+    channel_token: "${LINE_CHANNEL_TOKEN}"
+
+logging:
+  level: "debug" # debug | info | warn | error
+  format: "json" # json | text
