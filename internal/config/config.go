@@ -1,148 +1,176 @@
 package config
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
 )
 
+// Config holds all application configuration.
 type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
-	API      APIConfig      `mapstructure:"api"`
 	Database DatabaseConfig `mapstructure:"database"`
-	Redis    RedisConfig    `mapstructure:"redis"`
-	Queue    QueueConfig    `mapstructure:"queue"`
+	RabbitMQ RabbitMQConfig `mapstructure:"rabbitmq"`
+	Keycloak KeycloakConfig `mapstructure:"keycloak"`
 	Worker   WorkerConfig   `mapstructure:"worker"`
-	Provider ProviderConfig `mapstructure:"providers"`
 	Logging  LoggingConfig  `mapstructure:"logging"`
 }
 
+// ServerConfig holds HTTP server settings.
 type ServerConfig struct {
 	Host string `mapstructure:"host"`
 	Port int    `mapstructure:"port"`
 	Mode string `mapstructure:"mode"`
 }
 
-type APIConfig struct {
-	Key       string `mapstructure:"key"`
-	RateLimit int    `mapstructure:"rate_limit"`
-}
-
+// DatabaseConfig holds PostgreSQL settings.
 type DatabaseConfig struct {
 	Host     string `mapstructure:"host"`
 	Port     int    `mapstructure:"port"`
 	User     string `mapstructure:"user"`
 	Password string `mapstructure:"password"`
 	Name     string `mapstructure:"name"`
-	MaxConns int    `mapstructure:"max_conns"`
-	MinConns int    `mapstructure:"min_conns"`
+	SSLMode  string `mapstructure:"ssl_mode"`
+	MaxConns int32  `mapstructure:"max_conns"`
+	MinConns int32  `mapstructure:"min_conns"`
 }
 
-type RedisConfig struct {
-	Addr     string `mapstructure:"addr"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
-}
-
-type QueueConfig struct {
-	Engine     string         `mapstructure:"engine"`
-	NATS       NATSConfig     `mapstructure:"nats"`
-	RabbitMQ   RabbitMQConfig `mapstructure:"rabbitmq"`
-	BufferSize int            `mapstructure:"buffer_size"`
-}
-
-type NATSConfig struct {
-	URL     string `mapstructure:"url"`
-	Subject string `mapstructure:"subject"`
-}
-
+// RabbitMQConfig holds RabbitMQ settings.
 type RabbitMQConfig struct {
-	URL      string `mapstructure:"url"`
-	Queue    string `mapstructure:"queue"`
-	Exchange string `mapstructure:"exchange"`
+	URL           string `mapstructure:"url"`
+	PrefetchCount int    `mapstructure:"prefetch_count"`
 }
 
+// KeycloakConfig holds Keycloak authentication settings.
+type KeycloakConfig struct {
+	BaseURL      string `mapstructure:"base_url"`
+	Realm        string `mapstructure:"realm"`
+	ClientID     string `mapstructure:"client_id"`
+	ClientSecret string `mapstructure:"client_secret"`
+}
+
+// WorkerConfig holds background worker settings.
 type WorkerConfig struct {
 	Concurrency int           `mapstructure:"concurrency"`
 	MaxRetry    int           `mapstructure:"max_retry"`
 	RetryDelay  time.Duration `mapstructure:"retry_delay"`
 }
 
-type ProviderConfig struct {
-	Email    EmailProviderConfig    `mapstructure:"email"`
-	SMS      SMSProviderConfig      `mapstructure:"sms"`
-	Push     PushProviderConfig     `mapstructure:"push"`
-	Slack    SlackProviderConfig    `mapstructure:"slack"`
-	Telegram TelegramProviderConfig `mapstructure:"telegram"`
-	Line     LineProviderConfig     `mapstructure:"line"`
-}
-
-type EmailProviderConfig struct {
-	Enabled  bool   `mapstructure:"enabled"`
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	From     string `mapstructure:"from"`
-	Username string `mapstructure:"username"`
-	Password string `mapstructure:"password"`
-}
-
-type SMSProviderConfig struct {
-	Enabled    bool   `mapstructure:"enabled"`
-	AccountSID string `mapstructure:"account_sid"`
-	AuthToken  string `mapstructure:"auth_token"`
-	FromNumber string `mapstructure:"from_number"`
-}
-
-type PushProviderConfig struct {
-	Enabled bool           `mapstructure:"enabled"`
-	FCM     FCMConfig      `mapstructure:"fcm"`
-	APNs    APNsConfig     `mapstructure:"apns"`
-}
-
-type FCMConfig struct {
-	CredentialsFile string `mapstructure:"credentials_file"`
-}
-
-type APNsConfig struct {
-	CertFile   string `mapstructure:"cert_file"`
-	KeyFile    string `mapstructure:"key_file"`
-	Production bool   `mapstructure:"production"`
-}
-
-type SlackProviderConfig struct {
-	Enabled bool   `mapstructure:"enabled"`
-	Token   string `mapstructure:"token"`
-}
-
-type TelegramProviderConfig struct {
-	Enabled  bool   `mapstructure:"enabled"`
-	BotToken string `mapstructure:"bot_token"`
-}
-
-type LineProviderConfig struct {
-	Enabled       bool   `mapstructure:"enabled"`
-	ChannelSecret string `mapstructure:"channel_secret"`
-	ChannelToken  string `mapstructure:"channel_token"`
-}
-
+// LoggingConfig holds logging settings.
 type LoggingConfig struct {
 	Level  string `mapstructure:"level"`
 	Format string `mapstructure:"format"`
 }
 
-// Load reads config from file and environment variables.
-func Load(path string) (*Config, error) {
-	viper.SetConfigFile(path)
-	viper.AutomaticEnv()
+// Load reads configuration from file and environment.
+func Load(configPath string) (*Config, error) {
+	v := viper.New()
 
-	if err := viper.ReadInConfig(); err != nil {
-		return nil, err
+	// Set defaults
+	v.SetDefault("server.host", "0.0.0.0")
+	v.SetDefault("server.port", 8080)
+	v.SetDefault("server.mode", "debug")
+
+	v.SetDefault("database.host", "localhost")
+	v.SetDefault("database.port", 5432)
+	v.SetDefault("database.user", "postgres")
+	v.SetDefault("database.password", "postgres")
+	v.SetDefault("database.name", "notification_center")
+	v.SetDefault("database.ssl_mode", "disable")
+	v.SetDefault("database.max_conns", 25)
+	v.SetDefault("database.min_conns", 5)
+
+	v.SetDefault("rabbitmq.url", "amqp://guest:guest@localhost:5672/")
+	v.SetDefault("rabbitmq.prefetch_count", 10)
+
+	v.SetDefault("keycloak.base_url", "http://localhost:8180")
+	v.SetDefault("keycloak.realm", "notification-center")
+	v.SetDefault("keycloak.client_id", "notification-api")
+
+	v.SetDefault("worker.concurrency", 10)
+	v.SetDefault("worker.max_retry", 3)
+	v.SetDefault("worker.retry_delay", "5s")
+
+	v.SetDefault("logging.level", "info")
+	v.SetDefault("logging.format", "json")
+
+	// Read config file
+	if configPath != "" {
+		v.SetConfigFile(configPath)
+	} else {
+		v.SetConfigName("config")
+		v.SetConfigType("yaml")
+		v.AddConfigPath(".")
+		v.AddConfigPath("./config")
+	}
+
+	if err := v.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return nil, fmt.Errorf("failed to read config file: %w", err)
+		}
+	}
+
+	// Environment variables override
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
+	// Explicit env bindings
+	envBindings := map[string]string{
+		"SERVER_HOST":        "server.host",
+		"SERVER_PORT":        "server.port",
+		"DB_HOST":            "database.host",
+		"DB_PORT":            "database.port",
+		"DB_USER":            "database.user",
+		"DB_PASSWORD":        "database.password",
+		"DB_NAME":            "database.name",
+		"DB_SSL_MODE":        "database.ssl_mode",
+		"RABBITMQ_URL":       "rabbitmq.url",
+		"KEYCLOAK_BASE_URL":  "keycloak.base_url",
+		"KEYCLOAK_REALM":     "keycloak.realm",
+		"KEYCLOAK_CLIENT_ID": "keycloak.client_id",
+		"KEYCLOAK_SECRET":    "keycloak.client_secret",
+	}
+
+	for env, key := range envBindings {
+		if err := v.BindEnv(key, env); err != nil {
+			return nil, fmt.Errorf("failed to bind env %s: %w", env, err)
+		}
 	}
 
 	var cfg Config
-	if err := viper.Unmarshal(&cfg); err != nil {
-		return nil, err
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
 	return &cfg, nil
+}
+
+// Address returns the server address.
+func (c *ServerConfig) Address() string {
+	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+}
+
+// DSN returns the PostgreSQL connection string.
+func (c *DatabaseConfig) DSN() string {
+	return fmt.Sprintf(
+		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		c.User, c.Password, c.Host, c.Port, c.Name, c.SSLMode,
+	)
+}
+
+// JWKSURL returns the Keycloak JWKS endpoint.
+func (c *KeycloakConfig) JWKSURL() string {
+	return fmt.Sprintf("%s/realms/%s/protocol/openid-connect/certs", c.BaseURL, c.Realm)
+}
+
+// TokenURL returns the Keycloak token endpoint.
+func (c *KeycloakConfig) TokenURL() string {
+	return fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", c.BaseURL, c.Realm)
+}
+
+// UserInfoURL returns the Keycloak userinfo endpoint.
+func (c *KeycloakConfig) UserInfoURL() string {
+	return fmt.Sprintf("%s/realms/%s/protocol/openid-connect/userinfo", c.BaseURL, c.Realm)
 }

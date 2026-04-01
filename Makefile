@@ -3,6 +3,10 @@
 APP_NAME = notification-center
 MAIN     = ./cmd/server
 
+SOPS=sops
+ENCRYPT=$(SOPS) --encrypt --output config.enc.yaml config.yaml
+DECRYPT=$(SOPS) --decrypt --output config.yaml config.enc.yaml
+
 # Build the binary
 build:
 	go build -ldflags="-s -w" -o bin/$(APP_NAME) $(MAIN)
@@ -64,3 +68,15 @@ test-device:
 			"platform": "android", \
 			"app_version": "1.0.0" \
 		}'
+
+tidy:
+	$(GO_MOD_TIDY)
+
+swag:
+	$(SWAG_DOC)
+
+encrypt:
+	$(ENCRYPT)
+
+decrypt:
+	$(DECRYPT)
