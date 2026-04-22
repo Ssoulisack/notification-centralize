@@ -6,21 +6,22 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/your-org/notification-center/internal/middleware"
-	"github.com/your-org/notification-center/internal/services"
+	"github.com/your-org/notification-center/internal/data/services"
+	"github.com/your-org/notification-center/pkg/middleware"
+	"github.com/your-org/notification-center/pkg/response"
 )
 
 // InboxHandler handles user inbox endpoints.
 type InboxHandler struct {
-	notifService *services.NotificationService
-	userService  *services.UserSyncService
+	notifService services.NotificationService
+	userService  services.UserSyncService
 	logger       *slog.Logger
 }
 
 // NewInboxHandler creates a new inbox handler.
 func NewInboxHandler(
-	notifService *services.NotificationService,
-	userService *services.UserSyncService,
+	notifService services.NotificationService,
+	userService services.UserSyncService,
 	logger *slog.Logger,
 ) *InboxHandler {
 	return &InboxHandler{
@@ -35,39 +36,39 @@ func NewInboxHandler(
 func (h *InboxHandler) GetInbox(c *gin.Context) {
 	user, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		Unauthorized(c, "not authenticated")
+		response.Unauthorized(c, "not authenticated")
 		return
 	}
 
 	dbUser, err := h.userService.GetUserByKeycloakID(c.Request.Context(), user.KeycloakID)
 	if err != nil {
-		NotFound(c, "user not found")
+		response.NotFound(c, "user not found")
 		return
 	}
 
 	// Get project ID from query or use default
 	projectIDStr := c.Query("project_id")
 	if projectIDStr == "" {
-		BadRequest(c, "project_id is required")
+		response.BadRequest(c, "project_id is required")
 		return
 	}
 
 	projectID, err := uuid.Parse(projectIDStr)
 	if err != nil {
-		BadRequest(c, "invalid project_id")
+		response.BadRequest(c, "invalid project_id")
 		return
 	}
 
-	limit, offset := GetPaginationParams(c)
+	limit, offset := response.GetPaginationParams(c)
 
 	notifications, total, err := h.notifService.GetUserInbox(c.Request.Context(), projectID, dbUser.ID, limit, offset)
 	if err != nil {
 		h.logger.Error("failed to get inbox", "error", err)
-		InternalError(c, "failed to get inbox")
+		response.InternalError(c, "failed to get inbox")
 		return
 	}
 
-	Paginated(c, notifications, total, limit, offset)
+	response.Paginated(c, notifications, total, limit, offset)
 }
 
 // GetUnreadCount returns the count of unread notifications.
@@ -75,36 +76,36 @@ func (h *InboxHandler) GetInbox(c *gin.Context) {
 func (h *InboxHandler) GetUnreadCount(c *gin.Context) {
 	user, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		Unauthorized(c, "not authenticated")
+		response.Unauthorized(c, "not authenticated")
 		return
 	}
 
 	dbUser, err := h.userService.GetUserByKeycloakID(c.Request.Context(), user.KeycloakID)
 	if err != nil {
-		NotFound(c, "user not found")
+		response.NotFound(c, "user not found")
 		return
 	}
 
 	projectIDStr := c.Query("project_id")
 	if projectIDStr == "" {
-		BadRequest(c, "project_id is required")
+		response.BadRequest(c, "project_id is required")
 		return
 	}
 
 	projectID, err := uuid.Parse(projectIDStr)
 	if err != nil {
-		BadRequest(c, "invalid project_id")
+		response.BadRequest(c, "invalid project_id")
 		return
 	}
 
 	count, err := h.notifService.GetUnreadCount(c.Request.Context(), projectID, dbUser.ID)
 	if err != nil {
 		h.logger.Error("failed to get unread count", "error", err)
-		InternalError(c, "failed to get unread count")
+		response.InternalError(c, "failed to get unread count")
 		return
 	}
 
-	Success(c, gin.H{"unread_count": count})
+	response.Success(c, gin.H{"unread_count": count})
 }
 
 // MarkAsRead marks a notification as read.
@@ -112,27 +113,27 @@ func (h *InboxHandler) GetUnreadCount(c *gin.Context) {
 func (h *InboxHandler) MarkAsRead(c *gin.Context) {
 	user, err := middleware.GetUserFromContext(c)
 	if err != nil {
-		Unauthorized(c, "not authenticated")
+		response.Unauthorized(c, "not authenticated")
 		return
 	}
 
 	dbUser, err := h.userService.GetUserByKeycloakID(c.Request.Context(), user.KeycloakID)
 	if err != nil {
-		NotFound(c, "user not found")
+		response.NotFound(c, "user not found")
 		return
 	}
 
 	notificationID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		BadRequest(c, "invalid notification ID")
+		response.BadRequest(c, "invalid notification ID")
 		return
 	}
 
 	if err := h.notifService.MarkAsRead(c.Request.Context(), notificationID, dbUser.ID); err != nil {
 		h.logger.Error("failed to mark as read", "error", err)
-		InternalError(c, "failed to mark as read")
+		response.InternalError(c, "failed to mark as read")
 		return
 	}
 
-	Success(c, gin.H{"message": "marked as read"})
+	response.Success(c, gin.H{"message": "marked as read"})
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/your-org/notification-center/internal/config"
-	"github.com/your-org/notification-center/internal/models"
+	"github.com/your-org/notification-center/internal/domain/models"
 )
 
 // Context keys for user information.
@@ -109,7 +109,6 @@ func (m *AuthMiddleware) Handler() gin.HandlerFunc {
 			Username:      claims.PreferredUsername,
 			FirstName:     claims.GivenName,
 			LastName:      claims.FamilyName,
-			EmailVerified: claims.EmailVerified,
 		}
 
 		// Store in context

@@ -1,0 +1,515 @@
+{
+  "info": {
+    "name": "Notification Center",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080/api/v1" },
+    { "key": "access_token", "value": "" },
+    { "key": "api_key", "value": "nc_live_c73f28b012beb5f3d510849e88dbe53902ea0ab9b519b6854a83b4a9e6f266ce" },
+    { "key": "project_id", "value": "37bc7c6b-0264-4156-a9b5-0c160f7b8292" },
+    { "key": "notification_id", "value": "482f7dcb-9d9a-4e80-8f10-a15059c77e63" },
+    { "key": "api_key_id", "value": "650fa9c8-5edc-41a5-8f57-05deacaebc2c" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Token (username + password → access_token)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/auth/token",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "token"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"your-username\",\n  \"password\": \"your-password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login (Redirect to Keycloak)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/auth/login?redirect_uri=http://localhost:3000/callback",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"],
+              "query": [
+                { "key": "redirect_uri", "value": "http://localhost:3000/callback" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Callback",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/auth/callback?code=AUTHORIZATION_CODE",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "callback"],
+              "query": [
+                { "key": "code", "value": "AUTHORIZATION_CODE" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Me (Current User)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/users/me",
+              "host": ["{{base_url}}"],
+              "path": ["users", "me"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/users/me",
+              "host": ["{{base_url}}"],
+              "path": ["users", "me"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"John\",\n  \"last_name\": \"Doe\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get My Projects",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/users/me/projects?limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["users", "me", "projects"],
+              "query": [
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "List Projects",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/projects?limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["projects"],
+              "query": [
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Create Project",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/projects",
+              "host": ["{{base_url}}"],
+              "path": ["projects"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My App\",\n  \"description\": \"My notification project\",\n  \"slug\": \"my-app\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Project",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Update Project",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"description\": \"Updated description\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Project",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "API Keys",
+      "item": [
+        {
+          "name": "List API Keys",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}/api-keys?limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}", "api-keys"],
+              "query": [
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Create API Key",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}/api-keys",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}", "api-keys"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Production Key\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Revoke API Key",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}/api-keys/{{api_key_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}", "api-keys", "{{api_key_id}}"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications (JWT)",
+      "item": [
+        {
+          "name": "Send Notification",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}/notifications",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}", "notifications"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Hello!\",\n  \"body\": \"You have a new message.\",\n  \"priority\": \"normal\",\n  \"data\": { \"action\": \"open_inbox\" },\n  \"recipients\": [\n    {\n      \"user_id\": \"USER_UUID_HERE\",\n      \"channels\": [\"in_app\", \"email\"]\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Send Batch Notifications",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}/notifications/batch",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}", "notifications", "batch"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notifications\": [\n    {\n      \"title\": \"Notification 1\",\n      \"body\": \"First message\",\n      \"priority\": \"normal\",\n      \"recipients\": [\n        { \"user_id\": \"USER_UUID_HERE\", \"channels\": [\"in_app\"] }\n      ]\n    },\n    {\n      \"title\": \"Notification 2\",\n      \"body\": \"Second message\",\n      \"priority\": \"high\",\n      \"recipients\": [\n        { \"user_id\": \"USER_UUID_HERE\", \"channels\": [\"email\"] }\n      ]\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}/notifications?limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}", "notifications"],
+              "query": [
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Get Notification",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/projects/{{project_id}}/notifications/{{notification_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["projects", "{{project_id}}", "notifications", "{{notification_id}}"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inbox",
+      "item": [
+        {
+          "name": "Get Inbox",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/inbox?project_id={{project_id}}&limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["inbox"],
+              "query": [
+                { "key": "project_id", "value": "{{project_id}}" },
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Get Unread Count",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/inbox/unread/count?project_id={{project_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["inbox", "unread", "count"],
+              "query": [
+                { "key": "project_id", "value": "{{project_id}}" }
+              ]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        },
+        {
+          "name": "Mark As Read",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/inbox/{{notification_id}}/read",
+              "host": ["{{base_url}}"],
+              "path": ["inbox", "{{notification_id}}", "read"]
+            },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "External API (API Key)",
+      "item": [
+        {
+          "name": "Send Notification",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/notifications",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"]
+            },
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Order Shipped\",\n  \"body\": \"Your order #1234 has been shipped.\",\n  \"priority\": \"high\",\n  \"data\": { \"order_id\": \"1234\" },\n  \"recipients\": [\n    {\n      \"user_id\": \"USER_UUID_HERE\",\n      \"channels\": [\"in_app\", \"email\"]\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Send Batch Notifications",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/notifications/batch",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "batch"]
+            },
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notifications\": [\n    {\n      \"title\": \"Welcome!\",\n      \"body\": \"Thanks for signing up.\",\n      \"priority\": \"normal\",\n      \"recipients\": [\n        { \"user_id\": \"USER_UUID_HERE\", \"channels\": [\"in_app\"] }\n      ]\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/notifications?limit=20&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" }
+            ]
+          }
+        },
+        {
+          "name": "Get Notification",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notification_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "{{notification_id}}"]
+            },
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

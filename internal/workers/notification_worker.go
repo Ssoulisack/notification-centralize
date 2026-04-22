@@ -8,21 +8,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/your-org/notification-center/bootstrap/messaging"
 	"github.com/your-org/notification-center/internal/config"
-	"github.com/your-org/notification-center/internal/models"
+	"github.com/your-org/notification-center/internal/data/repository"
+	"github.com/your-org/notification-center/internal/domain/constants"
+	"github.com/your-org/notification-center/internal/domain/models"
 )
 
-// NotificationWorker processes notification messages from RabbitMQ.
-type NotificationWorker struct {
-	rabbitmq *messaging.Client
-	db       *pgxpool.Pool
-	config   *config.WorkerConfig
-	logger   *slog.Logger
+type notificationWorker struct {
+	rabbitmq      *messaging.Client
+	recipientRepo repository.RecipientRepository
+	config        *config.WorkerConfig
+	logger        *slog.Logger
 
 	wg      sync.WaitGroup
 	cancel  context.CancelFunc
@@ -30,23 +29,27 @@ type NotificationWorker struct {
 	mu      sync.Mutex
 }
 
-// NewNotificationWorker creates a new notification worker.
 func NewNotificationWorker(
 	rabbitmq *messaging.Client,
-	db *pgxpool.Pool,
+	recipientRepo repository.RecipientRepository,
 	cfg *config.WorkerConfig,
 	logger *slog.Logger,
-) *NotificationWorker {
-	return &NotificationWorker{
-		rabbitmq: rabbitmq,
-		db:       db,
-		config:   cfg,
-		logger:   logger,
+) NotificationWorker {
+	return &notificationWorker{
+		rabbitmq:      rabbitmq,
+		recipientRepo: recipientRepo,
+		config:        cfg,
+		logger:        logger,
 	}
 }
 
+type NotificationWorker interface {
+	Start(ctx context.Context) error
+	Stop()
+}
+
 // Start starts the worker pool.
-func (w *NotificationWorker) Start(ctx context.Context) error {
+func (w *notificationWorker) Start(ctx context.Context) error {
 	ctx, w.cancel = context.WithCancel(ctx)
 
 	queues := []string{
@@ -72,7 +75,7 @@ func (w *NotificationWorker) Start(ctx context.Context) error {
 }
 
 // Stop gracefully stops the worker.
-func (w *NotificationWorker) Stop() {
+func (w *notificationWorker) Stop() {
 	w.mu.Lock()
 	if w.stopped {
 		w.mu.Unlock()
@@ -90,7 +93,7 @@ func (w *NotificationWorker) Stop() {
 }
 
 // consumeQueue consumes messages from a queue.
-func (w *NotificationWorker) consumeQueue(ctx context.Context, queue, consumerTag string) {
+func (w *notificationWorker) consumeQueue(ctx context.Context, queue, consumerTag string) {
 	defer w.wg.Done()
 
 	deliveries, err := w.rabbitmq.Consume(ctx, queue, consumerTag)
@@ -131,7 +134,7 @@ func (w *NotificationWorker) consumeQueue(ctx context.Context, queue, consumerTa
 }
 
 // processMessage processes a single notification message.
-func (w *NotificationWorker) processMessage(ctx context.Context, delivery *amqp.Delivery) error {
+func (w *notificationWorker) processMessage(ctx context.Context, delivery *amqp.Delivery) error {
 	var msg models.QueueMessage
 	if err := json.Unmarshal(delivery.Body, &msg); err != nil {
 		return fmt.Errorf("failed to unmarshal message: %w", err)
@@ -143,24 +146,20 @@ func (w *NotificationWorker) processMessage(ctx context.Context, delivery *amqp.
 		"channel", msg.Channel,
 	)
 
-	// Update status to processing
-	if err := w.updateRecipientStatus(ctx, msg.RecipientID, models.StatusPending, ""); err != nil {
-		w.logger.Error("failed to update status",
-			"recipient_id", msg.RecipientID,
-			"error", err,
-		)
+	if err := w.recipientRepo.UpdateStatus(ctx, msg.RecipientID, constants.StatusPending, ""); err != nil {
+		w.logger.Error("failed to update status", "recipient_id", msg.RecipientID, "error", err)
 	}
 
 	// Process based on channel
 	var err error
 	switch msg.Channel {
-	case models.ChannelInApp:
+	case constants.ChannelInApp:
 		err = w.processInApp(ctx, &msg)
-	case models.ChannelEmail:
+	case constants.ChannelEmail:
 		err = w.processEmail(ctx, &msg)
-	case models.ChannelSMS:
+	case constants.ChannelSMS:
 		err = w.processSMS(ctx, &msg)
-	case models.ChannelPush:
+	case constants.ChannelPush:
 		err = w.processPush(ctx, &msg)
 	default:
 		err = fmt.Errorf("unsupported channel: %s", msg.Channel)
@@ -175,8 +174,7 @@ func (w *NotificationWorker) processMessage(ctx context.Context, delivery *amqp.
 				"error", err,
 			)
 
-			// Increment retry count
-			if updateErr := w.incrementRetryCount(ctx, msg.RecipientID); updateErr != nil {
+			if updateErr := w.recipientRepo.IncrementRetryCount(ctx, msg.RecipientID); updateErr != nil {
 				w.logger.Error("failed to update retry count", "error", updateErr)
 			}
 
@@ -192,7 +190,7 @@ func (w *NotificationWorker) processMessage(ctx context.Context, delivery *amqp.
 			"error", err,
 		)
 
-		if updateErr := w.updateRecipientStatus(ctx, msg.RecipientID, models.StatusFailed, err.Error()); updateErr != nil {
+		if updateErr := w.recipientRepo.UpdateStatus(ctx, msg.RecipientID, constants.StatusFailed, err.Error()); updateErr != nil {
 			w.logger.Error("failed to update failed status", "error", updateErr)
 		}
 
@@ -202,8 +200,7 @@ func (w *NotificationWorker) processMessage(ctx context.Context, delivery *amqp.
 		return nil // Don't return error - message is handled
 	}
 
-	// Success
-	if updateErr := w.updateRecipientStatus(ctx, msg.RecipientID, models.StatusSent, ""); updateErr != nil {
+	if updateErr := w.recipientRepo.UpdateStatus(ctx, msg.RecipientID, constants.StatusSent, ""); updateErr != nil {
 		w.logger.Error("failed to update sent status", "error", updateErr)
 	}
 
@@ -217,17 +214,12 @@ func (w *NotificationWorker) processMessage(ctx context.Context, delivery *amqp.
 	return nil
 }
 
-// processInApp handles in-app notification delivery.
-func (w *NotificationWorker) processInApp(ctx context.Context, msg *models.QueueMessage) error {
-	// In-app notifications are just stored in DB and marked as delivered
-	if err := w.updateRecipientStatus(ctx, msg.RecipientID, models.StatusDelivered, ""); err != nil {
-		return err
-	}
-	return nil
+func (w *notificationWorker) processInApp(ctx context.Context, msg *models.QueueMessage) error {
+	return w.recipientRepo.UpdateStatus(ctx, msg.RecipientID, constants.StatusDelivered, "")
 }
 
 // processEmail handles email notification delivery.
-func (w *NotificationWorker) processEmail(ctx context.Context, msg *models.QueueMessage) error {
+func (w *notificationWorker) processEmail(ctx context.Context, msg *models.QueueMessage) error {
 	// TODO: Implement actual email sending via SMTP
 	// For now, just log and mark as sent
 	w.logger.Info("sending email",
@@ -242,7 +234,7 @@ func (w *NotificationWorker) processEmail(ctx context.Context, msg *models.Queue
 }
 
 // processSMS handles SMS notification delivery.
-func (w *NotificationWorker) processSMS(ctx context.Context, msg *models.QueueMessage) error {
+func (w *notificationWorker) processSMS(ctx context.Context, msg *models.QueueMessage) error {
 	// TODO: Implement actual SMS sending via Twilio/etc
 	w.logger.Info("sending SMS",
 		"to", msg.Recipient,
@@ -256,7 +248,7 @@ func (w *NotificationWorker) processSMS(ctx context.Context, msg *models.QueueMe
 }
 
 // processPush handles push notification delivery.
-func (w *NotificationWorker) processPush(ctx context.Context, msg *models.QueueMessage) error {
+func (w *notificationWorker) processPush(ctx context.Context, msg *models.QueueMessage) error {
 	// TODO: Implement actual push notification via FCM/APNs
 	w.logger.Info("sending push notification",
 		"token", msg.Recipient[:20]+"...",
@@ -269,39 +261,8 @@ func (w *NotificationWorker) processPush(ctx context.Context, msg *models.QueueM
 	return nil
 }
 
-// updateRecipientStatus updates the status of a notification recipient.
-func (w *NotificationWorker) updateRecipientStatus(ctx context.Context, recipientID uuid.UUID, status models.Status, errorMsg string) error {
-	var query string
-	var args []interface{}
-
-	switch status {
-	case models.StatusSent:
-		query = `UPDATE notification_recipients SET status = $1, sent_at = NOW() WHERE id = $2`
-		args = []interface{}{status, recipientID}
-	case models.StatusDelivered:
-		query = `UPDATE notification_recipients SET status = $1, delivered_at = NOW() WHERE id = $2`
-		args = []interface{}{status, recipientID}
-	case models.StatusFailed:
-		query = `UPDATE notification_recipients SET status = $1, failed_at = NOW(), error_message = $3 WHERE id = $2`
-		args = []interface{}{status, recipientID, errorMsg}
-	default:
-		query = `UPDATE notification_recipients SET status = $1 WHERE id = $2`
-		args = []interface{}{status, recipientID}
-	}
-
-	_, err := w.db.Exec(ctx, query, args...)
-	return err
-}
-
-// incrementRetryCount increments the retry count for a recipient.
-func (w *NotificationWorker) incrementRetryCount(ctx context.Context, recipientID uuid.UUID) error {
-	query := `UPDATE notification_recipients SET retry_count = retry_count + 1 WHERE id = $1`
-	_, err := w.db.Exec(ctx, query, recipientID)
-	return err
-}
-
 // publishEvent publishes a notification event to RabbitMQ.
-func (w *NotificationWorker) publishEvent(ctx context.Context, eventType string, msg *models.QueueMessage, errorMsg string) {
+func (w *notificationWorker) publishEvent(ctx context.Context, eventType string, msg *models.QueueMessage, errorMsg string) {
 	event := map[string]interface{}{
 		"event_type":      eventType,
 		"notification_id": msg.NotificationID,

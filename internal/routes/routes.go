@@ -4,16 +4,16 @@ import (
 	"log/slog"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 
 	"github.com/your-org/notification-center/bootstrap/messaging"
 	"github.com/your-org/notification-center/internal/config"
-	"github.com/your-org/notification-center/internal/middleware"
+	"github.com/your-org/notification-center/pkg/middleware"
 )
 
 // Dependencies holds all dependencies needed for route setup.
 type Dependencies struct {
-	DB               *pgxpool.Pool
+	GormDB           *gorm.DB
 	RabbitMQ         *messaging.Client
 	Config           *config.Config
 	Logger           *slog.Logger
@@ -32,7 +32,7 @@ func Setup(router *gin.Engine, deps *Dependencies) {
 	SetupAuthRoutes(router, deps)
 
 	// Protected routes (JWT authenticated)
-	protected := router.Group("")
+	protected := router.Group("/api/v1")
 	protected.Use(deps.AuthMiddleware.Handler())
 	{
 		SetupUserRoutes(protected, deps)

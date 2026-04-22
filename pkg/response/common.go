@@ -1,4 +1,4 @@
-package handlers
+package response
 
 import (
 	"net/http"
@@ -51,12 +51,12 @@ func NoContent(c *gin.Context) {
 }
 
 // Paginated sends a paginated response.
-func Paginated(c *gin.Context, data any, total, limit, offset int) {
+func Paginated(c *gin.Context, data any, total int64, limit, offset int) {
 	c.JSON(http.StatusOK, PaginatedResponse{
 		Success: true,
 		Data:    data,
 		Meta: Meta{
-			Total:  total,
+			Total:  int(total),
 			Limit:  limit,
 			Offset: offset,
 		},

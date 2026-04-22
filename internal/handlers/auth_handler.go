@@ -1,25 +1,31 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/your-org/notification-center/internal/config"
-	"github.com/your-org/notification-center/internal/middleware"
-	"github.com/your-org/notification-center/internal/services"
+	"github.com/your-org/notification-center/internal/data/services"
+	"github.com/your-org/notification-center/pkg/middleware"
+	"github.com/your-org/notification-center/pkg/response"
 )
 
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
 	config      *config.KeycloakConfig
-	userService *services.UserSyncService
+	userService services.UserSyncService
 	logger      *slog.Logger
 }
 
 // NewAuthHandler creates a new auth handler.
-func NewAuthHandler(cfg *config.KeycloakConfig, userService *services.UserSyncService, logger *slog.Logger) *AuthHandler {
+func NewAuthHandler(cfg *config.KeycloakConfig, userService services.UserSyncService, logger *slog.Logger) *AuthHandler {
 	return &AuthHandler{
 		config:      cfg,
 		userService: userService,
@@ -57,13 +63,13 @@ func (h *AuthHandler) Callback(c *gin.Context) {
 
 	code := c.Query("code")
 	if code == "" {
-		BadRequest(c, "missing authorization code")
+		response.BadRequest(c, "missing authorization code")
 		return
 	}
 
 	// Token exchange would happen here
 	// For now, return a placeholder response
-	Success(c, gin.H{
+	response.Success(c, gin.H{
 		"message": "callback received",
 		"code":    code,
 	})
@@ -78,10 +84,60 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	logoutURL := h.config.BaseURL + "/realms/" + h.config.Realm + "/protocol/openid-connect/logout"
 
-	Success(c, gin.H{
+	response.Success(c, gin.H{
 		"message":    "logged out",
 		"logout_url": logoutURL,
 	})
+}
+
+// Token exchanges username/password directly for a Keycloak access token.
+// POST /auth/token
+func (h *AuthHandler) Token(c *gin.Context) {
+	var req struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", h.config.BaseURL, h.config.Realm)
+
+	form := url.Values{}
+	form.Set("grant_type", "password")
+	form.Set("client_id", h.config.ClientID)
+	form.Set("client_secret", h.config.ClientSecret)
+	form.Set("username", req.Username)
+	form.Set("password", req.Password)
+	form.Set("scope", "openid profile email")
+
+	resp, err := http.Post(tokenURL, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+	if err != nil {
+		h.logger.Error("failed to call keycloak token endpoint", "error", err)
+		response.InternalError(c, "failed to authenticate")
+		return
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		var keycloakErr struct {
+			ErrorDescription string `json:"error_description"`
+		}
+		_ = json.Unmarshal(body, &keycloakErr)
+		response.Error(c, http.StatusUnauthorized, keycloakErr.ErrorDescription)
+		return
+	}
+
+	var token map[string]any
+	if err := json.Unmarshal(body, &token); err != nil {
+		response.InternalError(c, "failed to parse token response")
+		return
+	}
+
+	response.Success(c, token)
 }
 
 // Me returns the current authenticated user.
@@ -89,17 +145,17 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 func (h *AuthHandler) Me(c *gin.Context) {
 	claims, err := middleware.GetClaimsFromContext(c)
 	if err != nil {
-		Unauthorized(c, "not authenticated")
+		response.Unauthorized(c, "not authenticated")
 		return
 	}
 
 	// Sync user to database
-	user, err := h.userService.SyncUser(c.Request.Context(), claims)
+	user, err := h.userService.Sync(c.Request.Context(), claims)
 	if err != nil {
 		h.logger.Error("failed to sync user", "error", err)
-		InternalError(c, "failed to sync user")
+		response.InternalError(c, "failed to sync user")
 		return
 	}
 
-	Success(c, user)
+	response.Success(c, user)
 }

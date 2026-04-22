@@ -1,29 +1,57 @@
-.PHONY: build run test lint docker-up docker-down migrate-up migrate-down
+.PHONY: build build-server build-worker run run-server run-worker run-all \
+        test lint tidy \
+        docker-up docker-down docker-logs \
+        migrate-up migrate-down \
+        encrypt decrypt
 
-APP_NAME = notification-center
-MAIN     = ./cmd/server
+APP_NAME   = notification-center
+SERVER_BIN = bin/server
+WORKER_BIN = bin/worker
 
-SOPS=sops
-ENCRYPT=$(SOPS) --encrypt --output config.enc.yaml config.yaml
-DECRYPT=$(SOPS) --decrypt --output config.yaml config.enc.yaml
+SOPS    = sops
+ENCRYPT = $(SOPS) --encrypt --output config.enc.yaml config.yaml
+DECRYPT = $(SOPS) --decrypt --output config.yaml config.enc.yaml
 
-# Build the binary
-build:
-	go build -ldflags="-s -w" -o bin/$(APP_NAME) $(MAIN)
+## ── Build ────────────────────────────────────────────────────────────────────
 
-# Run locally
-run:
-	go run $(MAIN)
+build: build-server build-worker
 
-# Run tests
+build-server:
+	go build -ldflags="-s -w" -o $(SERVER_BIN) ./cmd/api
+
+build-worker:
+	go build -ldflags="-s -w" -o $(WORKER_BIN) ./cmd/worker
+
+## ── Run ──────────────────────────────────────────────────────────────────────
+
+# API server only
+run-server:
+	go run ./cmd/api
+
+# Background worker only
+run-worker:
+	go run ./cmd/worker
+
+# Both server and worker (logs interleaved — use separate terminals for cleaner output)
+run-all:
+	@trap 'kill 0' INT TERM; go run ./cmd/api & go run ./cmd/worker & wait
+
+# Default: server only
+run: run-server
+
+## ── Test / Lint ──────────────────────────────────────────────────────────────
+
 test:
 	go test -v -race -cover ./...
 
-# Lint
 lint:
 	golangci-lint run ./...
 
-# Docker
+tidy:
+	go mod tidy
+
+## ── Docker ───────────────────────────────────────────────────────────────────
+
 docker-up:
 	docker compose -f deployments/docker-compose.yaml up -d --build
 
@@ -31,49 +59,20 @@ docker-down:
 	docker compose -f deployments/docker-compose.yaml down -v
 
 docker-logs:
-	docker compose -f deployments/docker-compose.yaml logs -f app
+	docker compose -f deployments/docker-compose.yaml logs -f
 
-# Database migrations (requires golang-migrate CLI)
+## ── Database migrations (requires golang-migrate CLI) ────────────────────────
+
+# Override with: make migrate-up DB_URL="postgres://user:pass@host:port/db?sslmode=disable"
+DB_URL ?= postgres://lotto_admin:ithq@2026@10.150.1.85:30432/notification_center?sslmode=disable
+
 migrate-up:
-	migrate -path migrations -database "postgres://notify:notify_secret@localhost:5432/notification_center?sslmode=disable" up
+	migrate -path bootstrap/database/migrations -database "$(DB_URL)" up
 
 migrate-down:
-	migrate -path migrations -database "postgres://notify:notify_secret@localhost:5432/notification_center?sslmode=disable" down
+	migrate -path bootstrap/database/migrations -database "$(DB_URL)" down
 
-# Generate proto (if using gRPC)
-proto:
-	protoc --go_out=. --go-grpc_out=. proto/*.proto
-
-# Quick test: send a notification
-test-send:
-	curl -X POST http://localhost:8080/api/v1/notifications \
-		-H "Content-Type: application/json" \
-		-H "X-API-Key: $${API_KEY}" \
-		-d '{ \
-			"channel": "email", \
-			"recipient": "test@example.com", \
-			"subject": "Test Notification", \
-			"body": "Hello from notification center!", \
-			"priority": "normal" \
-		}'
-
-# Quick test: register a device
-test-device:
-	curl -X POST http://localhost:8080/api/v1/devices \
-		-H "Content-Type: application/json" \
-		-H "X-API-Key: $${API_KEY}" \
-		-d '{ \
-			"user_id": "user_123", \
-			"token": "fcm_device_token_abc", \
-			"platform": "android", \
-			"app_version": "1.0.0" \
-		}'
-
-tidy:
-	$(GO_MOD_TIDY)
-
-swag:
-	$(SWAG_DOC)
+## ── Secrets ──────────────────────────────────────────────────────────────────
 
 encrypt:
 	$(ENCRYPT)

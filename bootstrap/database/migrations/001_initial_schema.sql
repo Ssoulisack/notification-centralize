@@ -8,10 +8,9 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TYPE notification_channel AS ENUM ('in_app', 'email', 'sms', 'push');
 CREATE TYPE notification_status AS ENUM ('pending', 'sent', 'delivered', 'failed', 'read');
 CREATE TYPE notification_priority AS ENUM ('low', 'normal', 'high', 'critical');
-CREATE TYPE member_role AS ENUM ('owner', 'admin', 'member', 'viewer');
 CREATE TYPE webhook_status AS ENUM ('pending', 'success', 'failed');
 
--- Users table (synced from Keycloak)
+-- Users table (synced from Keycloak — identity/roles managed by Keycloak)
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     keycloak_id VARCHAR(255) UNIQUE NOT NULL,
@@ -19,8 +18,6 @@ CREATE TABLE users (
     username VARCHAR(255) UNIQUE NOT NULL,
     first_name VARCHAR(255),
     last_name VARCHAR(255),
-    avatar_url TEXT,
-    email_verified BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
     last_login_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -33,6 +30,7 @@ CREATE INDEX idx_users_email ON users(email);
 -- Projects table
 CREATE TABLE projects (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     slug VARCHAR(255) UNIQUE NOT NULL,
@@ -43,59 +41,7 @@ CREATE TABLE projects (
 );
 
 CREATE INDEX idx_projects_slug ON projects(slug);
-
--- Roles with permissions
-CREATE TABLE roles (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name member_role UNIQUE NOT NULL,
-    permissions JSONB NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Insert default roles
-INSERT INTO roles (name, permissions) VALUES
-('owner', '{
-    "projects": {"read": true, "update": true, "delete": true, "manage_members": true},
-    "notifications": {"read": true, "create": true, "send_bulk": true, "delete": true},
-    "api_keys": {"read": true, "create": true, "revoke": true},
-    "analytics": {"view": true, "export": true},
-    "settings": {"read": true, "update": true}
-}'::jsonb),
-('admin', '{
-    "projects": {"read": true, "update": true, "delete": false, "manage_members": true},
-    "notifications": {"read": true, "create": true, "send_bulk": true, "delete": false},
-    "api_keys": {"read": true, "create": true, "revoke": true},
-    "analytics": {"view": true, "export": true},
-    "settings": {"read": true, "update": false}
-}'::jsonb),
-('member', '{
-    "projects": {"read": true, "update": false, "delete": false, "manage_members": false},
-    "notifications": {"read": true, "create": true, "send_bulk": false, "delete": false},
-    "api_keys": {"read": true, "create": false, "revoke": false},
-    "analytics": {"view": true, "export": false},
-    "settings": {"read": true, "update": false}
-}'::jsonb),
-('viewer', '{
-    "projects": {"read": true, "update": false, "delete": false, "manage_members": false},
-    "notifications": {"read": true, "create": false, "send_bulk": false, "delete": false},
-    "api_keys": {"read": false, "create": false, "revoke": false},
-    "analytics": {"view": true, "export": false},
-    "settings": {"read": true, "update": false}
-}'::jsonb);
-
--- Project members (users in projects)
-CREATE TABLE project_members (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id UUID NOT NULL REFERENCES roles(id),
-    joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    invited_by UUID REFERENCES users(id),
-    UNIQUE(project_id, user_id)
-);
-
-CREATE INDEX idx_project_members_project ON project_members(project_id);
-CREATE INDEX idx_project_members_user ON project_members(user_id);
+CREATE INDEX idx_projects_owner ON projects(owner_id);
 
 -- API Keys
 CREATE TABLE api_keys (
@@ -103,7 +49,7 @@ CREATE TABLE api_keys (
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
-    key_prefix VARCHAR(12) NOT NULL,
+    key_prefix VARCHAR(16) NOT NULL,
     key_hash VARCHAR(64) NOT NULL,
     scopes JSONB DEFAULT '["notifications:write", "notifications:read"]',
     last_used_at TIMESTAMP WITH TIME ZONE,
